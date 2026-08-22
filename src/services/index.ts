@@ -1,62 +1,76 @@
 /**
  * Service registry — single place to swap mock ↔ real implementations.
  *
- * Import services from here in screens/hooks, never directly from mock files.
- * When building the real backend, replace the class imports below;
- * nothing in the UI changes.
+ * CURRENT MODE: Hybrid
+ *   - DeviceService, WakeService, ConnectionService, PairingService
+ *     → real API implementations backed by the dev backend
+ *   - AuthService → still mocked (real auth is Phase 5)
  *
- * ─────────────────────────────────────────────────────────────────────
- * TO SWITCH TO THE REAL BACKEND (Phase 3):
+ * The backend URL is read from EXPO_PUBLIC_BACKEND_URL.
+ * Set it in a .env file at the repo root:
  *
- *   1. Replace this entire file with:
+ *   EXPO_PUBLIC_BACKEND_URL=http://192.168.1.3:3001
  *
- *      import { createApiServices } from './api';
- *      import { MockAuthService }   from './mock/MockAuthService';
- *      import type { AuthService }  from './AuthService';
+ * Falls back to localhost (Android emulator) if not set.
  *
- *      const { deviceService, wakeService, connectionService, pairingService }
- *        = createApiServices({
- *            baseUrl:  'https://api.wakelink.app',
- *            getToken: () => authService.getSession()
- *                              .then(s => s?.accessToken ?? null),
- *          });
- *
- *      export const authService: AuthService = new MockAuthService(); // replace last
- *      export { deviceService, wakeService, connectionService, pairingService };
- *
- *   2. Replace MockAuthService with a real OIDC implementation.
- *      Store tokens in expo-secure-store, never AsyncStorage.
- *
- * ─────────────────────────────────────────────────────────────────────
- *
- * Circular-import note:
- *   MockConnectionService and MockPairingService need references to
- *   deviceService and wakeService.  We construct all instances first,
- *   then assign them to the registry so they share the same singletons.
+ * TO USE MOCK SERVICES: set EXPO_PUBLIC_USE_MOCK=true in .env
  */
-import { MockDeviceService } from './mock/MockDeviceService';
-import { MockWakeService } from './mock/MockWakeService';
+
+import { createApiServices }     from './api';
+import { MockDeviceService }     from './mock/MockDeviceService';
+import { MockWakeService }       from './mock/MockWakeService';
 import { MockConnectionService } from './mock/MockConnectionService';
-import { MockPairingService } from './mock/MockPairingService';
-import { MockAuthService } from './mock/MockAuthService';
+import { MockPairingService }    from './mock/MockPairingService';
+import { MockAuthService }       from './mock/MockAuthService';
 
-import type { DeviceService } from './DeviceService';
-import type { WakeService } from './WakeService';
+import type { DeviceService }     from './DeviceService';
+import type { WakeService }       from './WakeService';
 import type { ConnectionService } from './ConnectionService';
-import type { PairingService } from './PairingService';
-import type { AuthService } from './AuthService';
+import type { PairingService }    from './PairingService';
+import type { AuthService }       from './AuthService';
 
-// Instantiate singletons
-export const deviceService: DeviceService & InstanceType<typeof MockDeviceService> =
-  new MockDeviceService();
-
-export const wakeService: WakeService = new MockWakeService();
-
-export const connectionService: ConnectionService = new MockConnectionService(
-  deviceService,
-  wakeService,
-);
-
-export const pairingService: PairingService = new MockPairingService(deviceService);
-
+// Auth is always mocked until Phase 5
 export const authService: AuthService = new MockAuthService();
+
+// ── Service selection ─────────────────────────────────────────────────────────
+const useMock    = process.env['EXPO_PUBLIC_USE_MOCK'] === 'true';
+const backendUrl = process.env['EXPO_PUBLIC_BACKEND_URL'] ?? 'http://localhost:3001';
+
+function buildServices(): {
+  deviceService:     DeviceService;
+  wakeService:       WakeService;
+  connectionService: ConnectionService;
+  pairingService:    PairingService;
+} {
+  if (useMock) {
+    // Full mock — no network calls, works without a running backend
+    const mockDevice  = new MockDeviceService();
+    const mockWake    = new MockWakeService();
+    return {
+      deviceService:     mockDevice,
+      wakeService:       mockWake,
+      connectionService: new MockConnectionService(mockDevice, mockWake),
+      pairingService:    new MockPairingService(mockDevice),
+    };
+  }
+
+  // Real API services — backed by the dev backend (or real cloud)
+  const api = createApiServices({
+    baseUrl:  backendUrl,
+    getToken: () => authService.getSession().then((s) => s?.accessToken ?? null),
+  });
+
+  return {
+    deviceService:     api.deviceService,
+    wakeService:       api.wakeService,
+    connectionService: api.connectionService,
+    pairingService:    api.pairingService,
+  };
+}
+
+const services = buildServices();
+
+export const deviceService:     DeviceService     = services.deviceService;
+export const wakeService:       WakeService       = services.wakeService;
+export const connectionService: ConnectionService = services.connectionService;
+export const pairingService:    PairingService    = services.pairingService;

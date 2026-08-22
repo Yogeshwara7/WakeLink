@@ -42,14 +42,6 @@ export default function TabsLayout() {
           tabBarLabel: 'My PCs',
         }}
       />
-      <Tabs.Screen
-        name="pair"
-        options={{
-          title: 'Add PC',
-          tabBarLabel: 'Add PC',
-          href: null, // accessible via button, not tab bar
-        }}
-      />
     </Tabs>
   );
 }

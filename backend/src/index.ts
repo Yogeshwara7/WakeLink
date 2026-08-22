@@ -72,14 +72,16 @@ app.use(errorHandler);
 
 // ── Start (only when run directly, not when imported by tests) ────────────────
 if (require.main === module) {
-  app.listen(PORT, '127.0.0.1', () => {
+  // Bind to 0.0.0.0 so the phone can reach the backend over Wi-Fi.
+  // In production this is replaced by a real cloud backend with TLS.
+  app.listen(PORT, '0.0.0.0', () => {
     console.log('');
     console.log('╔════════════════════════════════════════╗');
     console.log('║   WakeLink Dev Backend                 ║');
     console.log('║   ⚠️  DEVELOPMENT ONLY — not for prod  ║');
-    console.log(`║   Listening on http://127.0.0.1:${PORT}  ║`);
+    console.log(`║   Listening on http://0.0.0.0:${PORT}    ║`);
+    console.log(`║   Phone URL: http://192.168.1.3:${PORT}  ║`);
     console.log('╠════════════════════════════════════════╣');
-    console.log('║   Endpoints:                           ║');
     console.log('║   POST /api/devices/register           ║');
     console.log('║   GET  /api/devices/:id                ║');
     console.log('║   POST /api/devices/:id/heartbeat      ║');
