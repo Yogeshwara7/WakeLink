@@ -12,6 +12,12 @@ export interface PairingSession {
   code: string;
   method: PairingMethod;
   status: PairingStatus;
+  /**
+   * Backend session UUID — returned by /api/pairing/start and carried
+   * through to /api/pairing/complete.  Optional so mock services that
+   * don't use a backend are unaffected.
+   */
+  sessionId?: string;
   /** Friendly name the user assigns to the newly paired PC. */
   deviceName?: string;
   /** ISO-8601 timestamp when this session expires. */

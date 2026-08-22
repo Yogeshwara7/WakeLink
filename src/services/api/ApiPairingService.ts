@@ -34,7 +34,6 @@ interface StartPairingResponse {
   message?: string;
   error?: string;
 }
-
 interface CompleteResponse {
   success: boolean;
   deviceId?: string;
@@ -92,6 +91,7 @@ export class ApiPairingService implements PairingService {
         ...session,
         code:      normalised,
         status:    'confirmed',
+        sessionId: res.sessionId,          // ← carry the real backend sessionId
         expiresAt: res.expiresAt ?? session.expiresAt,
       };
     } catch (err) {
@@ -109,10 +109,14 @@ export class ApiPairingService implements PairingService {
     session: PairingSession,
     deviceName: string,
   ): Promise<Device> {
+    // Use the real sessionId from /api/pairing/start if available.
+    // Fallback to session.code only for backwards compatibility with mock flows.
+    const sessionId = session.sessionId ?? session.code;
+
     const res = await this.client.post<CompleteResponse>(
       '/api/pairing/complete',
       {
-        sessionId:  session.code, // in real flow sessionId is returned by submitCode
+        sessionId,
         userId:     'pending-auth', // replaced when real auth is in place
         deviceName: deviceName.trim(),
       },
