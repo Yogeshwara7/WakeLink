@@ -32,6 +32,12 @@ export interface DeviceCapabilities {
  * - `lastSeen` ISO-8601 timestamp; null when never seen.
  * - `platform` OS family — e.g. "windows", "mac", "linux".
  * - `capabilities` Feature flags; do NOT assume all are true.
+ *
+ * Phase 3 additions (all optional — existing mock devices are unaffected):
+ * - `macAddress`          Primary network adapter MAC, used for WoL magic packet.
+ * - `wakeSupported`       True only when the hardware + BIOS supports WoL.
+ * - `wakeStatus`          Current wake-cycle state (set by backend, not agent).
+ * - `lastWakeRequestedAt` ISO-8601 timestamp of the most recent wake request.
  */
 export interface Device {
   id: string;
@@ -40,6 +46,12 @@ export interface Device {
   lastSeen: string | null;
   platform: 'windows' | 'mac' | 'linux' | 'unknown';
   capabilities: DeviceCapabilities;
+
+  // ── Phase 3: Wake-on-LAN fields (optional) ───────────────────────────────
+  macAddress?: string;
+  wakeSupported?: boolean;
+  wakeStatus?: 'IDLE' | 'WAKING' | 'ONLINE' | 'FAILED';
+  lastWakeRequestedAt?: string;
 }
 
 /** Partial update payload — keeps services clean when only one field changes. */

@@ -21,6 +21,7 @@ import { errorHandler } from './middleware/errorHandler';
 import deviceRoutes  from './routes/devices';
 import pairingRoutes from './routes/pairing';
 import commandRoutes from './routes/commands';
+import wakeRoutes    from './routes/wake';
 import { DeviceStore } from './store/DeviceStore';
 
 const PORT = parseInt(process.env['PORT'] ?? '3001', 10);
@@ -36,6 +37,8 @@ app.use('/api/devices',  deviceRoutes);
 app.use('/api/pairing',  pairingRoutes);
 // Command routes need deviceId prefix — mount under /api/devices
 app.use('/api/devices',  commandRoutes);
+// Phase 3: Wake-on-LAN route
+app.use('/api/devices',  wakeRoutes);
 
 // ── Health check ────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
@@ -67,25 +70,28 @@ app.get('/debug', (_req, res) => {
 // ── Error handler ────────────────────────────────────────────────────────────
 app.use(errorHandler);
 
-// ── Start ─────────────────────────────────────────────────────────────────────
-app.listen(PORT, '127.0.0.1', () => {
-  console.log('');
-  console.log('╔════════════════════════════════════════╗');
-  console.log('║   WakeLink Dev Backend                 ║');
-  console.log('║   ⚠️  DEVELOPMENT ONLY — not for prod  ║');
-  console.log(`║   Listening on http://127.0.0.1:${PORT}  ║`);
-  console.log('╠════════════════════════════════════════╣');
-  console.log('║   Endpoints:                           ║');
-  console.log('║   POST /api/devices/register           ║');
-  console.log('║   GET  /api/devices/:id                ║');
-  console.log('║   POST /api/devices/:id/heartbeat      ║');
-  console.log('║   POST /api/pairing/start              ║');
-  console.log('║   POST /api/pairing/complete           ║');
-  console.log('║   POST /api/devices/:id/commands       ║');
-  console.log('║   GET  /health                         ║');
-  console.log('║   GET  /debug                          ║');
-  console.log('╚════════════════════════════════════════╝');
-  console.log('');
-});
+// ── Start (only when run directly, not when imported by tests) ────────────────
+if (require.main === module) {
+  app.listen(PORT, '127.0.0.1', () => {
+    console.log('');
+    console.log('╔════════════════════════════════════════╗');
+    console.log('║   WakeLink Dev Backend                 ║');
+    console.log('║   ⚠️  DEVELOPMENT ONLY — not for prod  ║');
+    console.log(`║   Listening on http://127.0.0.1:${PORT}  ║`);
+    console.log('╠════════════════════════════════════════╣');
+    console.log('║   Endpoints:                           ║');
+    console.log('║   POST /api/devices/register           ║');
+    console.log('║   GET  /api/devices/:id                ║');
+    console.log('║   POST /api/devices/:id/heartbeat      ║');
+    console.log('║   POST /api/devices/:id/wake           ║');
+    console.log('║   POST /api/pairing/start              ║');
+    console.log('║   POST /api/pairing/complete           ║');
+    console.log('║   POST /api/devices/:id/commands       ║');
+    console.log('║   GET  /health                         ║');
+    console.log('║   GET  /debug                          ║');
+    console.log('╚════════════════════════════════════════╝');
+    console.log('');
+  });
+}
 
 export default app;

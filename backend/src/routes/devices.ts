@@ -19,6 +19,10 @@ router.post('/register', (req: Request, res: Response) => {
     os, osVersion, capabilities,
   } = req.body as Partial<StoredDevice>;
 
+  // Phase 3 fields
+  const macAddress    = (req.body as Partial<StoredDevice>).macAddress;
+  const wakeSupported = (req.body as Partial<StoredDevice>).wakeSupported;
+
   if (!deviceId || !deviceName) {
     res.status(400).json({ error: 'deviceId and deviceName are required' });
     return;
@@ -43,6 +47,11 @@ router.post('/register', (req: Request, res: Response) => {
     lastHeartbeatAt: now,
     registeredAt:    existing?.registeredAt ?? now,
     pairedUserId:    existing?.pairedUserId ?? null,
+    // Phase 3: preserve existing wake fields; update if agent sends them
+    macAddress:      macAddress      ?? existing?.macAddress,
+    wakeSupported:   wakeSupported   ?? existing?.wakeSupported ?? false,
+    wakeStatus:      existing?.wakeStatus ?? 'IDLE',
+    lastWakeRequestedAt: existing?.lastWakeRequestedAt,
   };
 
   store.devices.set(deviceId, device);
@@ -117,9 +126,24 @@ router.post('/:deviceId/heartbeat', (req: Request, res: Response) => {
   device.status          = 'ONLINE';
   device.lastHeartbeatAt = new Date().toISOString();
 
+  // If the device was WAKING, cancel the timeout and mark wake complete
+  if (device.wakeStatus === 'WAKING') {
+    store.cancelWakeTimeout(deviceId);
+    device.wakeStatus = 'ONLINE';
+    console.log(`[WAKE] Device ${deviceId} came online after wake request`);
+  }
+
   // Update agent version if it changed (e.g. after an upgrade)
   if (req.body.agentVersion) {
     device.agentVersion = req.body.agentVersion as string;
+  }
+
+  // Phase 3: update MAC and wakeSupported if agent reports them
+  if (req.body.macAddress) {
+    device.macAddress = req.body.macAddress as string;
+  }
+  if (typeof req.body.wakeSupported === 'boolean') {
+    device.wakeSupported = req.body.wakeSupported as boolean;
   }
 
   res.json({ success: true, acknowledged: true });

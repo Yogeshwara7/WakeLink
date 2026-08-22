@@ -4,10 +4,15 @@ import type { IdentityManager } from '../identity/IdentityManager';
 import type { AgentStateManager } from '../agent/AgentState';
 import type { AgentConfig } from '../config/Config';
 import { SystemInfo } from '../system/SystemInfo';
+import { NetworkInfo } from '../system/NetworkInfo';
 import { Logger } from '../utils/Logger';
 
 /**
  * DeviceRegistrationPayload — sent to the backend when the agent connects.
+ *
+ * Phase 3 additions:
+ *   macAddress    — primary adapter MAC for Wake-on-LAN.
+ *   wakeSupported — explicitly false until BIOS/NIC confirmed by the user.
  */
 export interface DeviceRegistrationPayload {
   deviceId: string;
@@ -21,6 +26,8 @@ export interface DeviceRegistrationPayload {
     hardwareWake: boolean;
     remoteDesktop: boolean;
   };
+  macAddress?: string;
+  wakeSupported: boolean;
 }
 
 /**
@@ -109,8 +116,14 @@ export class ConnectionManager {
   }
 
   private buildRegistrationPayload(): DeviceRegistrationPayload {
-    const identity = this.identityManager.get();
-    const system = SystemInfo.capture();
+    const identity   = this.identityManager.get();
+    const system     = SystemInfo.capture();
+    const interfaces = NetworkInfo.getActiveInterfaces();
+
+    // Use the MAC of the first active non-internal adapter.
+    // NEVER log this value.
+    const primaryMac = interfaces.length > 0 ? interfaces[0].mac : undefined;
+
     return {
       deviceId:     identity.deviceId,
       deviceName:   identity.deviceName,
@@ -119,11 +132,24 @@ export class ConnectionManager {
       os:           system.platform,
       osVersion:    system.osVersion,
       capabilities: {
-        // WoL capability will be determined dynamically in a future version
-        wakeOnLan:     true,
+        wakeOnLan:     interfaces.length > 0,  // true if we have at least one NIC
         hardwareWake:  false,
-        remoteDesktop: false, // not yet implemented
+        remoteDesktop: false,
       },
+      macAddress:   primaryMac,
+      /**
+       * wakeSupported defaults to false.
+       *
+       * Wake-on-LAN requires:
+       *   1. BIOS/UEFI: "Wake on LAN" or "Power On By PCIe" enabled.
+       *   2. Windows Device Manager → NIC → Power Management →
+       *      "Allow this device to wake the computer" checked.
+       *   3. For laptops: connected to power (most laptops disable WoL on battery).
+       *
+       * Set WAKELINK_WAKE_SUPPORTED=true in the agent's .env after confirming
+       * the above requirements are met on this specific machine.
+       */
+      wakeSupported: process.env['WAKELINK_WAKE_SUPPORTED'] === 'true',
     };
   }
 
