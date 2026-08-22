@@ -5,6 +5,30 @@
  * When building the real backend, replace the class imports below;
  * nothing in the UI changes.
  *
+ * ─────────────────────────────────────────────────────────────────────
+ * TO SWITCH TO THE REAL BACKEND (Phase 3):
+ *
+ *   1. Replace this entire file with:
+ *
+ *      import { createApiServices } from './api';
+ *      import { MockAuthService }   from './mock/MockAuthService';
+ *      import type { AuthService }  from './AuthService';
+ *
+ *      const { deviceService, wakeService, connectionService, pairingService }
+ *        = createApiServices({
+ *            baseUrl:  'https://api.wakelink.app',
+ *            getToken: () => authService.getSession()
+ *                              .then(s => s?.accessToken ?? null),
+ *          });
+ *
+ *      export const authService: AuthService = new MockAuthService(); // replace last
+ *      export { deviceService, wakeService, connectionService, pairingService };
+ *
+ *   2. Replace MockAuthService with a real OIDC implementation.
+ *      Store tokens in expo-secure-store, never AsyncStorage.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ *
  * Circular-import note:
  *   MockConnectionService and MockPairingService need references to
  *   deviceService and wakeService.  We construct all instances first,
