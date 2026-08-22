@@ -29,9 +29,14 @@ interface WakeResponse {
   success: boolean;
   deviceId: string;
   wakeStatus: string;
-  lastWakeRequestedAt: string;
+  lastWakeRequestedAt?: string;
+  alreadyOnline?: boolean;
+  via?: 'relay' | 'direct';
+  relayId?: string;
   message?: string;
   error?: string;
+  code?: string;
+  detail?: string;
 }
 
 interface DeviceStatusResponse {
@@ -62,13 +67,40 @@ export class ApiWakeService implements WakeService {
    * Resolves when the request has been dispatched (not when the PC is online).
    */
   async sendWakeRequest(deviceId: string): Promise<void> {
-    const res = await this.client.post<WakeResponse>(
-      `/api/devices/${deviceId}/wake`,
-      {},
-    );
-    if (!res.success) {
-      throw new Error(res.error ?? 'Wake request failed');
+    let res: WakeResponse;
+    try {
+      res = await this.client.post<WakeResponse>(
+        `/api/devices/${deviceId}/wake`,
+        {},
+      );
+    } catch (err) {
+      // Parse structured error codes for actionable messages
+      if (err instanceof Error) {
+        const msg = err.message;
+        if (msg.includes('RELAY_OFFLINE'))
+          throw new Error(
+            'Your home relay is offline. Make sure the WakeLink Relay is running on your always-on device.',
+          );
+        if (msg.includes('RELAY_NOT_CONFIGURED'))
+          throw new Error(
+            'No home relay configured. To wake your PC over the internet, install the WakeLink Home Relay on an always-on device at home.',
+          );
+        if (msg.includes('WAKE_NOT_SUPPORTED'))
+          throw new Error(
+            'Wake-on-LAN is not enabled on this PC. Check BIOS settings and Windows NIC power management.',
+          );
+        if (msg.includes('MAC_NOT_REGISTERED'))
+          throw new Error(
+            'PC MAC address not registered. Make sure the WakeLink Agent is running.',
+          );
+        if (msg.includes('ALREADY_WAKING'))
+          return; // already in progress — not an error for the UI
+      }
+      throw err;
     }
+
+    if (res.alreadyOnline) return; // PC already on — proceed to connect
+    if (!res.success) throw new Error(res.error ?? 'Wake request failed');
   }
 
   /**

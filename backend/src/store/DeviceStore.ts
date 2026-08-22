@@ -23,17 +23,65 @@ export interface StoredDevice {
   pairedUserId: string | null;
 
   // ── Phase 3: Wake-on-LAN fields ──────────────────────────────────────────
-  /** Primary network adapter MAC address — used to send the magic packet. */
   macAddress?: string;
-  /**
-   * True only when BIOS and network adapter both support Wake-on-LAN.
-   * Defaults to false — agent must explicitly set this to true.
-   */
   wakeSupported?: boolean;
-  /** Current state of the most recent wake cycle. */
   wakeStatus?: 'IDLE' | 'WAKING' | 'ONLINE' | 'FAILED';
-  /** ISO-8601 timestamp of the most recent wake request. */
   lastWakeRequestedAt?: string;
+
+  // ── Phase 4: Relay association ────────────────────────────────────────────
+  /**
+   * The relayId of the WakeLink Home Relay that can wake this device.
+   * Set when the relay registers and declares the devices it can reach.
+   * null = no relay configured; wake only works on same LAN as backend.
+   */
+  relayId?: string | null;
+}
+
+// ── Phase 4: Relay types ────────────────────────────────────────────────────
+
+export type RelayStatus = 'ONLINE' | 'OFFLINE' | 'UNKNOWN';
+
+/**
+ * StoredRelay — represents a WakeLink Home Relay registered with the backend.
+ *
+ * The relay is an always-on process running inside the home network.
+ * It polls the backend for RELAY_WAKE commands and executes them locally
+ * via UDP broadcast (WakeOnLanService).
+ *
+ * SECURITY:
+ *   relayTokenHash stores a SHA-256 hash of the relay's secret token.
+ *   The raw token is only ever held by the relay process and never logged.
+ */
+export interface StoredRelay {
+  relayId: string;
+  /** SHA-256 hash of the relay's secret token — never store raw token. */
+  relayTokenHash: string;
+  /** Friendly name for the relay (e.g. "Home Raspberry Pi"). */
+  relayName: string;
+  relayVersion: string;
+  status: RelayStatus;
+  lastHeartbeatAt: string | null;
+  registeredAt: string;
+  /** deviceIds this relay is responsible for waking. */
+  deviceIds: string[];
+  /** Broadcast address this relay should use for WoL packets. */
+  broadcastAddress: string;
+}
+
+/**
+ * StoredRelayCommand — a command queued for a relay to execute.
+ */
+export interface StoredRelayCommand {
+  commandId: string;
+  relayId: string;
+  type: 'RELAY_WAKE';
+  deviceId: string;
+  macAddress: string;
+  broadcastAddress: string;
+  timestamp: string;
+  expiresAt: string;
+  processedAt: string | null;
+  result: { success: boolean; error?: string } | null;
 }
 
 export interface StoredPairingSession {
@@ -59,16 +107,17 @@ export interface StoredCommand {
 
 /**
  * DeviceStore — the single in-memory data store for the dev backend.
- *
- * All state lives here. No persistence between restarts by design
- * (keeps the dev environment clean and stateless).
  */
 export class DeviceStore {
   private static instance: DeviceStore;
 
-  readonly devices   = new Map<string, StoredDevice>();
-  readonly pairing   = new Map<string, StoredPairingSession>();
-  readonly commands  = new Map<string, StoredCommand>();
+  readonly devices        = new Map<string, StoredDevice>();
+  readonly pairing        = new Map<string, StoredPairingSession>();
+  readonly commands       = new Map<string, StoredCommand>();
+  /** Phase 4: relay registry */
+  readonly relays         = new Map<string, StoredRelay>();
+  /** Phase 4: commands queued for relay execution */
+  readonly relayCommands  = new Map<string, StoredRelayCommand>();
 
   /** Active WAKING-timeout timers keyed by deviceId. */
   private readonly wakeTimers = new Map<string, NodeJS.Timeout>();
@@ -129,6 +178,34 @@ export class DeviceStore {
     if (existing) {
       clearTimeout(existing);
       this.wakeTimers.delete(deviceId);
+    }
+  }
+
+  // ── Phase 4: Relay helpers ────────────────────────────────────────────────
+
+  /**
+   * Returns the relay associated with a device, or null.
+   * Also checks if the relay is online (recent heartbeat ≤ 90s).
+   */
+  getRelayForDevice(deviceId: string): StoredRelay | null {
+    const device = this.devices.get(deviceId);
+    if (!device?.relayId) return null;
+    return this.relays.get(device.relayId) ?? null;
+  }
+
+  /** Returns true if the relay has sent a heartbeat within the last 90 seconds. */
+  isRelayOnline(relay: StoredRelay): boolean {
+    if (!relay.lastHeartbeatAt) return false;
+    const age = Date.now() - new Date(relay.lastHeartbeatAt).getTime();
+    return age < 90_000;
+  }
+
+  /** Mark stale relays as OFFLINE (called on /health and /debug). */
+  pruneStaleRelays(): void {
+    for (const relay of this.relays.values()) {
+      if (relay.status === 'ONLINE' && !this.isRelayOnline(relay)) {
+        relay.status = 'OFFLINE';
+      }
     }
   }
 }

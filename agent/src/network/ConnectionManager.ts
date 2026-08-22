@@ -28,6 +28,12 @@ export interface DeviceRegistrationPayload {
   };
   macAddress?: string;
   wakeSupported: boolean;
+  /**
+   * Phase 4: relayId of the WakeLink Home Relay on this network.
+   * Set via WAKELINK_RELAY_ID env var after the relay is installed.
+   * null when no relay is configured.
+   */
+  relayId?: string | null;
 }
 
 /**
@@ -137,19 +143,13 @@ export class ConnectionManager {
         remoteDesktop: false,
       },
       macAddress:   primaryMac,
-      /**
-       * wakeSupported defaults to false.
-       *
-       * Wake-on-LAN requires:
-       *   1. BIOS/UEFI: "Wake on LAN" or "Power On By PCIe" enabled.
-       *   2. Windows Device Manager → NIC → Power Management →
-       *      "Allow this device to wake the computer" checked.
-       *   3. For laptops: connected to power (most laptops disable WoL on battery).
-       *
-       * Set WAKELINK_WAKE_SUPPORTED=true in the agent's .env after confirming
-       * the above requirements are met on this specific machine.
-       */
       wakeSupported: process.env['WAKELINK_WAKE_SUPPORTED'] === 'true',
+      /**
+       * If a WakeLink Home Relay is running on this network, set
+       * WAKELINK_RELAY_ID in the agent's .env to associate this device
+       * with that relay. The backend will then route wake requests through it.
+       */
+      relayId: process.env['WAKELINK_RELAY_ID'] ?? null,
     };
   }
 

@@ -52,6 +52,10 @@ router.post('/register', (req: Request, res: Response) => {
     wakeSupported:   wakeSupported   ?? existing?.wakeSupported ?? false,
     wakeStatus:      existing?.wakeStatus ?? 'IDLE',
     lastWakeRequestedAt: existing?.lastWakeRequestedAt,
+    // Phase 4: relay association — agent reports its relay, or keep existing
+    relayId: (req.body as { relayId?: string | null }).relayId
+               ?? existing?.relayId
+               ?? null,
   };
 
   store.devices.set(deviceId, device);

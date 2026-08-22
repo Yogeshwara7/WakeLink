@@ -22,6 +22,7 @@ import deviceRoutes  from './routes/devices';
 import pairingRoutes from './routes/pairing';
 import commandRoutes from './routes/commands';
 import wakeRoutes    from './routes/wake';
+import relayRoutes   from './routes/relay';
 import { DeviceStore } from './store/DeviceStore';
 
 const PORT = parseInt(process.env['PORT'] ?? '3001', 10);
@@ -35,23 +36,30 @@ app.use(requestLogger);
 // ── Routes ──────────────────────────────────────────────────────────────────
 app.use('/api/devices',  deviceRoutes);
 app.use('/api/pairing',  pairingRoutes);
-// Command routes need deviceId prefix — mount under /api/devices
 app.use('/api/devices',  commandRoutes);
-// Phase 3: Wake-on-LAN route
 app.use('/api/devices',  wakeRoutes);
+// Phase 4: Relay registry
+app.use('/api/relay',    relayRoutes);
 
 // ── Health check ────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
   store.pruneStaleDevices();
+  store.pruneStaleRelays();
   const devices = Array.from(store.devices.values());
+  const relays  = Array.from(store.relays.values());
   res.json({
-    status:        'ok',
-    environment:   'development',
-    timestamp:     new Date().toISOString(),
-    devicesOnline: devices.filter((d) => d.status === 'ONLINE').length,
-    devicesTotal:  devices.length,
+    status:          'ok',
+    environment:     'development',
+    timestamp:       new Date().toISOString(),
+    devicesOnline:   devices.filter((d) => d.status === 'ONLINE').length,
+    devicesTotal:    devices.length,
+    relaysOnline:    relays.filter((r) => store.isRelayOnline(r)).length,
+    relaysTotal:     relays.length,
     pairingSessions: store.pairing.size,
     pendingCommands: Array.from(store.commands.values()).filter(
+      (c) => c.processedAt === null,
+    ).length,
+    pendingRelayCommands: Array.from(store.relayCommands.values()).filter(
       (c) => c.processedAt === null,
     ).length,
   });
@@ -60,10 +68,12 @@ app.get('/health', (_req, res) => {
 // ── Debug: dump full state ───────────────────────────────────────────────────
 app.get('/debug', (_req, res) => {
   res.json({
-    warning: 'DEVELOPMENT ONLY — remove in production',
-    devices:  Array.from(store.devices.values()),
-    pairing:  Array.from(store.pairing.values()),
-    commands: Array.from(store.commands.values()),
+    warning:      'DEVELOPMENT ONLY — remove in production',
+    devices:      Array.from(store.devices.values()),
+    pairing:      Array.from(store.pairing.values()),
+    commands:     Array.from(store.commands.values()),
+    relays:       Array.from(store.relays.values()).map(({ relayTokenHash: _omit, ...r }) => r),
+    relayCommands: Array.from(store.relayCommands.values()),
   });
 });
 
