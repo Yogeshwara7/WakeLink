@@ -71,7 +71,71 @@ export class Agent {
         config,
       );
 
-      if (identity.pairingStatus === 'UNPAIRED') {
+      // ── Pairing startup state machine ──────────────────────────────────
+      //
+      //  PAIRED   → skip, proceed to connect normally
+      //  UNPAIRED → generate new session, display code, register with backend
+      //  PAIRING  → inspect persisted session:
+      //               valid (not expired, not consumed) → reuse, display code
+      //               expired or missing               → reset to UNPAIRED,
+      //                                                  generate fresh session
+
+      let needsPairingSession = false;
+
+      if (identity.pairingStatus === 'PAIRED') {
+        // Normal operation — device already paired.
+        log.info('Pairing status: PAIRED — no pairing session needed');
+
+      } else if (identity.pairingStatus === 'UNPAIRED') {
+        log.info('Pairing status: UNPAIRED — generating new pairing session');
+        needsPairingSession = true;
+
+      } else {
+        // PAIRING — a session was started but never completed.
+        log.info('Pairing status: PAIRING — inspecting persisted session...');
+
+        const { exists, expired, consumed, session: existing } =
+          await this.pairingManager.inspectSession();
+
+        if (exists && !expired && !consumed) {
+          // Valid session — reuse it so the user can still pair.
+          log.info('Existing pairing session: VALID — reusing');
+          this.stateManager.transition('UNPAIRED');
+          log.info('─────────────────────────────────────────');
+          log.info('PAIRING CODE: ' + existing!.pairingCode);
+          log.info('QR PAYLOAD:   ' + JSON.stringify(existing!.qrPayload));
+          log.info(`Expires:      ${existing!.expiresAt}`);
+          log.info('─────────────────────────────────────────');
+          log.info('Open WakeLink on your phone and pair this device.');
+          this.stateManager.transition('PAIRING');
+
+          // Re-register with the backend in case it restarted
+          try {
+            await httpPost(
+              `${config.backendUrl}/api/pairing/agent-register`,
+              existing,
+            );
+            log.info('Pairing session re-registered with backend');
+          } catch (err) {
+            log.warn(
+              'Could not re-register pairing session: ' +
+              (err instanceof Error ? err.message : String(err)),
+            );
+          }
+
+        } else {
+          // Session is expired, consumed, or missing — start fresh.
+          if (exists && expired)   log.info('Existing pairing session: EXPIRED — generating new session');
+          else if (exists && consumed) log.info('Existing pairing session: CONSUMED — generating new session');
+          else                     log.info('Existing pairing session: MISSING — generating new session');
+
+          await this.pairingManager.resetExpiredSession();
+          log.info('Identity reset to UNPAIRED (deviceId preserved)');
+          needsPairingSession = true;
+        }
+      }
+
+      if (needsPairingSession) {
         this.stateManager.transition('UNPAIRED');
         const session = await this.pairingManager.generatePairingSession();
         log.info('─────────────────────────────────────────');
@@ -82,8 +146,6 @@ export class Agent {
         log.info('Open WakeLink on your phone and pair this device.');
         this.stateManager.transition('PAIRING');
 
-        // Register pairing session with the dev backend so the mobile app
-        // can look it up when the user enters the code.
         try {
           await httpPost(
             `${config.backendUrl}/api/pairing/agent-register`,

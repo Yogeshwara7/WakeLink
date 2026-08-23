@@ -92,6 +92,18 @@ export class IdentityManager {
     await this.persist();
   }
 
+  /**
+   * Roll back to UNPAIRED — used when a stale PAIRING session is cleared
+   * on startup so a fresh pairing session can be generated.
+   * Does NOT change the deviceId.
+   */
+  async markUnpaired(): Promise<void> {
+    this.assertInitialised();
+    this.identity!.pairingStatus = 'UNPAIRED';
+    this.identity!.pairedUserId  = null;
+    await this.persist();
+  }
+
   /** Rename the device. */
   async rename(newName: string): Promise<void> {
     this.assertInitialised();

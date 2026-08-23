@@ -167,6 +167,42 @@ export class PairingManager {
     return this.loadSession();
   }
 
+  /**
+   * Inspect the persisted session and return a structured status.
+   * Used by Agent.ts to decide what to do on startup when
+   * pairingStatus is already 'PAIRING'.
+   */
+  async inspectSession(): Promise<{
+    exists: boolean;
+    expired: boolean;
+    consumed: boolean;
+    session: AgentPairingSession | null;
+  }> {
+    const session = await this.loadSession();
+    if (!session) {
+      return { exists: false, expired: false, consumed: false, session: null };
+    }
+    return {
+      exists:   true,
+      expired:  this.isExpired(session),
+      consumed: session.consumed,
+      session,
+    };
+  }
+
+  /**
+   * Clear a stale/expired pairing session and roll the identity back
+   * to UNPAIRED so Agent.ts can generate a fresh session.
+   *
+   * IMPORTANT: this does NOT change the deviceId.
+   * The identity file is updated in-place; only pairingStatus changes.
+   */
+  async resetExpiredSession(): Promise<void> {
+    await this.storage.remove(PAIRING_SESSION_KEY);
+    await this.identityManager.markUnpaired();
+    this.log.info('Stale pairing session cleared — identity reset to UNPAIRED');
+  }
+
   // ── Private helpers ────────────────────────────────────────────────────
 
   private generateCode(): string {
