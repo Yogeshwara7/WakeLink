@@ -96,10 +96,9 @@ export default function ConnectScreen() {
         setVisitedSteps((prev) => new Set([...prev, step]));
         animateRow(step);
       })
-      .then(() => {
+      .then((session) => {
         if (cancelled) return;
         setPhase('connected');
-        // Animate success indicator
         Animated.parallel([
           Animated.spring(successScale, {
             toValue: 1,
@@ -113,10 +112,16 @@ export default function ConnectScreen() {
             useNativeDriver: true,
           }),
         ]).start(() => {
-          // Short pause then navigate to session screen
           setTimeout(() => {
             if (!cancelled) {
-              router.replace(`/session/${id}`);
+              // Pass session metadata to session screen via query params
+              const params = new URLSearchParams();
+              if (session.sessionId)    params.set('sessionId',    session.sessionId);
+              if (session.sessionToken) params.set('sessionToken', session.sessionToken);
+              if (session.wsProxyPath)  params.set('wsProxyPath',  session.wsProxyPath);
+              if (session.sessionType)  params.set('sessionType',  session.sessionType);
+              const query = params.toString();
+              router.replace(`/session/${id}${query ? '?' + query : ''}`);
             }
           }, 800);
         });

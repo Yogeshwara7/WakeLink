@@ -23,6 +23,7 @@ import pairingRoutes from './routes/pairing';
 import commandRoutes from './routes/commands';
 import wakeRoutes    from './routes/wake';
 import relayRoutes   from './routes/relay';
+import sessionRoutes from './routes/sessions';
 import { DeviceStore } from './store/DeviceStore';
 
 const PORT = parseInt(process.env['PORT'] ?? '3001', 10);
@@ -38,8 +39,10 @@ app.use('/api/devices',  deviceRoutes);
 app.use('/api/pairing',  pairingRoutes);
 app.use('/api/devices',  commandRoutes);
 app.use('/api/devices',  wakeRoutes);
-// Phase 4: Relay registry
 app.use('/api/relay',    relayRoutes);
+// Phase 5: remote session orchestration
+app.use('/api/devices',  sessionRoutes);   // /api/devices/:id/connect
+app.use('/api/sessions', sessionRoutes);   // /api/sessions/:sessionId/*
 
 // ── Health check ────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
@@ -62,6 +65,9 @@ app.get('/health', (_req, res) => {
     pendingRelayCommands: Array.from(store.relayCommands.values()).filter(
       (c) => c.processedAt === null,
     ).length,
+    activeSessions: Array.from(store.sessions.values()).filter(
+      (s) => !['ENDED', 'FAILED', 'TIMEOUT'].includes(s.status),
+    ).length,
   });
 });
 
@@ -74,6 +80,7 @@ app.get('/debug', (_req, res) => {
     commands:     Array.from(store.commands.values()),
     relays:       Array.from(store.relays.values()).map(({ relayTokenHash: _omit, ...r }) => r),
     relayCommands: Array.from(store.relayCommands.values()),
+    sessions:     Array.from(store.sessions.values()).map(({ sessionToken: _omit, ...s }) => s),
   });
 });
 

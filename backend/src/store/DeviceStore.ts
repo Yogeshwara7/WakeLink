@@ -37,6 +37,54 @@ export interface StoredDevice {
   relayId?: string | null;
 }
 
+// ── Phase 5: Remote Session types ──────────────────────────────────────────
+
+export type SessionStatus =
+  | 'REQUESTED'
+  | 'STARTING'
+  | 'READY'
+  | 'CONNECTED'
+  | 'DISCONNECTING'
+  | 'ENDED'
+  | 'FAILED'
+  | 'TIMEOUT';
+
+/**
+ * StoredSession — one active or completed remote session.
+ *
+ * SECURITY:
+ *   sessionToken is a short-lived secret shared only with the mobile client.
+ *   Used to authenticate the WebSocket proxy connection.
+ *   Never logged. Expires with the session.
+ */
+export interface StoredSession {
+  sessionId: string;
+  deviceId: string;
+  userId: string;
+  status: SessionStatus;
+  createdAt: string;
+  expiresAt: string;
+  updatedAt: string;
+  /** Short-lived token sent to mobile for WS proxy auth — never log this. */
+  sessionToken: string;
+  /** Populated by agent after CONNECT_REQUEST is processed. */
+  connectionInfo?: SessionConnectionInfo;
+  errorMessage?: string;
+}
+
+/**
+ * Connection info reported by the agent — tells mobile how to reach the
+ * session via the backend's WebSocket proxy.
+ */
+export interface SessionConnectionInfo {
+  /** Backend WS proxy path: /api/sessions/:id/ws */
+  wsProxyPath: string;
+  /** VNC host the backend proxies to (LAN, not exposed publicly). */
+  vncHost: string;
+  vncPort: number;
+  sessionType: 'vnc' | 'webrtc' | 'rdp' | 'mock';
+}
+
 // ── Phase 4: Relay types ────────────────────────────────────────────────────
 
 export type RelayStatus = 'ONLINE' | 'OFFLINE' | 'UNKNOWN';
@@ -118,6 +166,8 @@ export class DeviceStore {
   readonly relays         = new Map<string, StoredRelay>();
   /** Phase 4: commands queued for relay execution */
   readonly relayCommands  = new Map<string, StoredRelayCommand>();
+  /** Phase 5: remote sessions */
+  readonly sessions       = new Map<string, StoredSession>();
 
   /** Active WAKING-timeout timers keyed by deviceId. */
   private readonly wakeTimers = new Map<string, NodeJS.Timeout>();

@@ -20,4 +20,18 @@ export interface ConnectionSession {
   message: string;
   startedAt: string;
   errorMessage?: string;
+
+  // ── Phase 5: Remote session fields (optional — mock flows unaffected) ─────
+  /** Backend session UUID — populated once the agent reports READY. */
+  sessionId?: string;
+  /**
+   * Short-lived auth token for the WebSocket proxy connection.
+   * Passed to the session screen so it can authenticate the WebView.
+   * NEVER log this value.
+   */
+  sessionToken?: string;
+  /** WebSocket proxy path on the backend: /api/sessions/:id/ws */
+  wsProxyPath?: string;
+  /** Session technology reported by the agent. */
+  sessionType?: 'vnc' | 'webrtc' | 'rdp' | 'mock';
 }

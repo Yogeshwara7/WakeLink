@@ -11,6 +11,7 @@ import { CommandHandler } from '../commands/CommandHandler';
 import { AgentStateManager } from './AgentState';
 import { Logger } from '../utils/Logger';
 import { httpPost } from '../utils/httpPost';
+import { createSessionProvider } from '../session/createSessionProvider';
 
 /**
  * Agent — the top-level orchestrator that wires all modules together.
@@ -171,6 +172,8 @@ export class Agent {
         this.identityManager,
         this.pairingManager,
         this.stateManager,
+        createSessionProvider(),
+        config.backendUrl,
       );
 
       this.commandPoller = new CommandPoller(
