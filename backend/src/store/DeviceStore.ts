@@ -44,6 +44,7 @@ export type SessionStatus =
   | 'STARTING'
   | 'READY'
   | 'CONNECTED'
+  | 'CONNECTION_LOST'
   | 'DISCONNECTING'
   | 'ENDED'
   | 'FAILED'

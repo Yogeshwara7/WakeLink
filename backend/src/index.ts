@@ -16,6 +16,7 @@
  */
 
 import express from 'express';
+import * as http from 'http';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler } from './middleware/errorHandler';
 import deviceRoutes  from './routes/devices';
@@ -24,6 +25,7 @@ import commandRoutes from './routes/commands';
 import wakeRoutes    from './routes/wake';
 import relayRoutes   from './routes/relay';
 import sessionRoutes from './routes/sessions';
+import { VncProxy }  from './proxy/VncProxy';
 import { DeviceStore } from './store/DeviceStore';
 
 const PORT = parseInt(process.env['PORT'] ?? '3001', 10);
@@ -87,11 +89,19 @@ app.get('/debug', (_req, res) => {
 // ── Error handler ────────────────────────────────────────────────────────────
 app.use(errorHandler);
 
+// Export proxy factory for test suites that need to spin up WS connections
+export { VncProxy } from './proxy/VncProxy';
+
 // ── Start (only when run directly, not when imported by tests) ────────────────
 if (require.main === module) {
+  const server = http.createServer(app);
+
+  // Phase 6: attach the WebSocket VNC proxy to the same HTTP server
+  const vncProxy = new VncProxy();
+  vncProxy.attach(server);
+
   // Bind to 0.0.0.0 so the phone can reach the backend over Wi-Fi.
-  // In production this is replaced by a real cloud backend with TLS.
-  app.listen(PORT, '0.0.0.0', () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log('');
     console.log('╔════════════════════════════════════════╗');
     console.log('║   WakeLink Dev Backend                 ║');
@@ -106,6 +116,7 @@ if (require.main === module) {
     console.log('║   POST /api/pairing/start              ║');
     console.log('║   POST /api/pairing/complete           ║');
     console.log('║   POST /api/devices/:id/commands       ║');
+    console.log('║   GET  /api/sessions/:id/ws  (WS VNC)  ║');
     console.log('║   GET  /health                         ║');
     console.log('║   GET  /debug                          ║');
     console.log('╚════════════════════════════════════════╝');
